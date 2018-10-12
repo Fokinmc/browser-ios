@@ -124,6 +124,7 @@ class MainSidePanelViewController: SidePanelBaseViewController, MainSidePanelVie
         if Sync.shared.isInSyncGroup { return }
         
         syncSetupViewController = SyncWelcomeViewController()
+        syncSetupViewController?.fromModal = true
         guard let setupVC = syncSetupViewController else { return }
         setupVC.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(closeSync))
         

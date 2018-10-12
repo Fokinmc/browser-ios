@@ -165,6 +165,11 @@ class SyncDevicesSetting: Setting {
             let syncSettingsView = SyncSettingsViewController(style: .grouped)
             syncSettingsView.profile = getApp().profile
             navigationController?.pushViewController(syncSettingsView, animated: true)
+            
+            syncSettingsView.dismissHandler = {
+                navigationController?.popToRootViewController(animated: true)
+            }
+            
         } else {
             let view = SyncWelcomeViewController()
             navigationController?.pushViewController(view, animated: true)

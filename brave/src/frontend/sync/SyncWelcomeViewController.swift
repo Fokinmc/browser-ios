@@ -10,7 +10,10 @@ protocol NavigationPrevention {
 }
 
 class SyncWelcomeViewController: SyncViewController {
-
+    /// There is one use case when we show this VC in modal form, and after succesfully setting up sync
+    /// we need to dismiss the controller altogether.
+    var fromModal = false
+    
     lazy var mainStackView: UIStackView = {
         let stackView = UIStackView()
         stackView.axis = .vertical
@@ -189,6 +192,14 @@ class SyncWelcomeViewController: SyncViewController {
         let settings = SyncSettingsViewController(style: .grouped)
         settings.profile = getApp().profile
         settings.disableBackButton = true
-        self.navigationController?.pushViewController(settings, animated: true)
+        navigationController?.pushViewController(settings, animated: true)
+        
+        settings.dismissHandler = {
+            if self.fromModal {
+                self.dismiss(animated: true)
+            } else {
+                self.navigationController?.popToRootViewController(animated: true)
+            }
+        }
     }
 }

@@ -156,7 +156,7 @@ class Sync: JSInjector {
         return context
     }()
     
-    var syncFetchedHandlers: [() -> ()] = []
+    var syncFetchedHandlers = [() -> ()]()
     
     override init() {
         super.init()

@@ -205,7 +205,7 @@ class BookmarksPanel: SiteTableViewController, HomePanel {
         
         NotificationCenter.default.addObserver(self, selector: #selector(self.reloadData), name: NotificationMainThreadContextSignificantlyChanged, object: nil)
         
-        Sync.shared.syncFetchedHandlers?.append { [weak self] in
+        Sync.shared.syncFetchedHandlers.append { [weak self] in
             self?.reloadData()
         }
     }

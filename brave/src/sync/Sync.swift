@@ -156,7 +156,7 @@ class Sync: JSInjector {
         return context
     }()
     
-    var syncFetchedHandlers: [() -> ()]?
+    var syncFetchedHandlers: [() -> ()] = []
     
     override init() {
         super.init()
@@ -544,7 +544,7 @@ extension Sync {
             self.lastFetchWasTrimmed = false
         }
         
-        syncFetchedHandlers?.forEach { $0() }
+        syncFetchedHandlers.forEach { $0() }
     }
 
     func deleteSyncUser(_ data: [String: AnyObject]) {

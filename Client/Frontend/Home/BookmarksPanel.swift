@@ -181,7 +181,7 @@ class BookmarksPanel: SiteTableViewController, HomePanel {
   
     var isEditingIndividualBookmark:Bool = false
     
-    var delegate: MainSidePanelViewControllerDelegate?
+    weak var delegate: MainSidePanelViewControllerDelegate?
 
     var currentFolder: Bookmark? = nil
 
@@ -205,8 +205,8 @@ class BookmarksPanel: SiteTableViewController, HomePanel {
         
         NotificationCenter.default.addObserver(self, selector: #selector(self.reloadData), name: NotificationMainThreadContextSignificantlyChanged, object: nil)
         
-        NotificationCenter.default.addObserver(forName: NSNotification.Name(rawValue: NotificationSyncFetched), object: nil, queue: OperationQueue.main, using: { notification in
-            self.reloadData()
+        NotificationCenter.default.addObserver(forName: NSNotification.Name(rawValue: NotificationSyncFetched), object: nil, queue: .main, using: { [weak self] _ in
+            self?.reloadData()
         })
     }
 
@@ -503,34 +503,34 @@ class BookmarksPanel: SiteTableViewController, HomePanel {
 
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: UIFontWeightRegular)
+        label.font = UIFont.systemFont(ofSize: 14, weight: UIFont.Weight.regular)
         label.textAlignment = .center
         
-        if !Sync.shared.isInSyncGroup {
-            label.textColor = BraveUX.LightBlue
-            label.numberOfLines = 2
-            label.text = "Sync your bookmarks \racross devices"
-        } else {
+        if Sync.shared.isInSyncGroup {
             label.textColor = BraveUX.GreyG
             label.numberOfLines = 1
             
             if Sync.shared.lastFetchedRecordTimestamp != nil {
-                label.text = "Syncing..."
+                label.text = Strings.Syncing
             }
+        } else {
+            label.textColor = BraveUX.LightBlue
+            label.numberOfLines = 2
+            label.text = Strings.SyncBookmarksCallout
         }
         
         let view = UIView()
         view.backgroundColor = BraveUX.White
-        view.layer.shadowOffset = CGSize(width: 0, height: 0)
+        view.layer.shadowOffset = CGSize.zero
         view.layer.shadowColor = BraveUX.GreyD.cgColor
         view.layer.shadowRadius = 1
         view.layer.shadowOpacity = 1
         
-        let headerTapGesture = UITapGestureRecognizer(target: self, action: #selector(SEL_tapSyncHeader(_:)))
+        let headerTapGesture = UITapGestureRecognizer(target: self, action: #selector(tapSyncHeader))
         view.addSubview(label)
         view.addGestureRecognizer(headerTapGesture)
         
-        label.snp.makeConstraints { (make) in
+        label.snp.makeConstraints { make in
             make.margins.equalTo(view)
         }
         
@@ -552,7 +552,7 @@ class BookmarksPanel: SiteTableViewController, HomePanel {
             return 0
         }
         
-        return !Sync.shared.isInSyncGroup ? 58 : 28
+        return Sync.shared.isInSyncGroup ? 28 : 58
     }
     
     func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
@@ -645,7 +645,7 @@ class BookmarksPanel: SiteTableViewController, HomePanel {
         self.navigationController?.pushViewController(nextController, animated: true)
     }
     
-    func SEL_tapSyncHeader(_ gesture: UITapGestureRecognizer?) {
+    @objc func tapSyncHeader() {
         delegate?.openSyncSetup()
     }
 }

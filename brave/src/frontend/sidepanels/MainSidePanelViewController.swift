@@ -4,11 +4,11 @@ import CoreData
 import SnapKit
 import Shared
 
-protocol MainSidePanelViewControllerDelegate {
-    func openSyncSetup() -> Void
+protocol MainSidePanelViewControllerDelegate: class {
+    func openSyncSetup()
 }
 
-class MainSidePanelViewController : SidePanelBaseViewController, MainSidePanelViewControllerDelegate {
+class MainSidePanelViewController: SidePanelBaseViewController, MainSidePanelViewControllerDelegate {
 
     let bookmarksPanel = BookmarksPanel(folder: nil)
     fileprivate var bookmarksNavController:UINavigationController!
@@ -121,17 +121,18 @@ class MainSidePanelViewController : SidePanelBaseViewController, MainSidePanelVi
     }
     
     func openSyncSetup() {
-        if !Sync.shared.isInSyncGroup {
-            syncSetupViewController = SyncWelcomeViewController()
-            syncSetupViewController!.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(SEL_closeSync))
-            
-            let settingsNavController = SettingsNavigationController(rootViewController: syncSetupViewController!)
-            settingsNavController.modalPresentationStyle = UIModalPresentationStyle.formSheet
-            present(settingsNavController, animated: true, completion: nil)
-        }
+        if Sync.shared.isInSyncGroup { return }
+        
+        syncSetupViewController = SyncWelcomeViewController()
+        guard let setupVC = syncSetupViewController else { return }
+        setupVC.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(closeSync))
+        
+        let settingsNavController = SettingsNavigationController(rootViewController: setupVC)
+        settingsNavController.modalPresentationStyle = .formSheet
+        present(settingsNavController, animated: true)
     }
     
-    @objc func SEL_closeSync() {
+    @objc func closeSync() {
         syncSetupViewController?.dismiss(animated: true)
     }
 

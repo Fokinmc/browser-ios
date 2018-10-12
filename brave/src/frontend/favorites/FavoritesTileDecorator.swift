@@ -41,7 +41,7 @@ class FavoritesTileDecorator {
         }
     }
 
-    init(url: URL, cell: ThumbnailCell, indexPath: IndexPath) {
+    init(url: URL, cell: ThumbnailCell, indexPath: IndexPath, color: UIColor? = nil) {
         self.url = url
         self.cell = cell
         self.indexPath = indexPath
@@ -62,7 +62,6 @@ class FavoritesTileDecorator {
             cell.imageView.backgroundColor = website.backgroundColor
             cell.imageView.contentMode = .scaleAspectFit
             cell.imageView.layer.minificationFilter = kCAFilterTrilinear
-            cell.showBorder(!PrivateBrowsing.singleton.isOn)
 
             UIGraphicsBeginImageContextWithOptions(image.size, false, 0)
             image.draw(in: CGRect(origin: CGPoint(x: 3, y: 6), size: CGSize(width: image.size.width - 6, height: image.size.height - 6)))
@@ -81,7 +80,7 @@ class FavoritesTileDecorator {
             setDefaultTile()
 
             // attempt to resolove domain problem
-            let context = DataController.shared.mainThreadContext
+            let context = DataController.viewContext
             if let domain = Domain.getOrCreateForUrl(url, context: context), let faviconMO = domain.favicon, let urlString = faviconMO.url, let iconUrl = URL(string: urlString) {
                 postAsyncToMain {
                     self.setCellImage(self.cell, iconUrl: iconUrl, cacheWithUrl: self.url)
@@ -91,7 +90,6 @@ class FavoritesTileDecorator {
                 // last resort - download the icon
                 downloadFaviconsAndUpdateForUrl(url, indexPath: indexPath)
             }
-            break
         }
     }
 
@@ -107,16 +105,10 @@ class FavoritesTileDecorator {
                 }
             }
             else {
-                postAsyncToMain {
-                    cell.imageView.sd_setImage(with: iconUrl, completed: { (img, err, type, url) in
-                        guard let img = img else {
-                            // avoid retrying to find an icon when none can be found, hack skips FaviconFetch
-                            ImageCache.shared.cache(ThumbnailCellUX.PlaceholderImage!, url: cacheWithUrl, type: .square, callback: nil)
-                            cell.imageView.image = ThumbnailCellUX.PlaceholderImage
-                            return
-                        }
-                        ImageCache.shared.cache(img, url: cacheWithUrl, type: .square, callback: nil)
-                    })
+                cell.imageView.setFaviconImage(with: iconUrl, cacheUrl: cacheWithUrl) { image in
+                    if image.getPixelColor(of: CGPoint(x: 10, y: 10)).isVeryLight {
+                        cell.showBorder(true)
+                    }
                 }
             }
         })

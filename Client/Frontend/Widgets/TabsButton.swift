@@ -11,11 +11,11 @@ private let log = Logger.browserLogger
 
 struct TabsButtonUX {
     static let CornerRadius: CGFloat = 2
-    static let TitleFont: UIFont = UIConstants.DefaultChromeSmallFontBold
+    static let TitleFont: UIFont = UIFont.systemFont(ofSize: 10, weight: UIFont.Weight.semibold)
     static let BorderStrokeWidth: CGFloat = 1.5
     static let BorderColor = UIColor.clear
     static let HighlightButtonColor = UIColor.clear
-    static let TitleInsets = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+    static let TitleInsets = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
 
     static let Themes: [String: Theme] = {
         var themes = [String: Theme]()
@@ -99,11 +99,12 @@ class TabsButton: UIControl {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        insideButton.addSubview(imageView)
         
-//        insideButton.addSubview(labelBackground)
-//        insideButton.addSubview(borderView)
-//        insideButton.addSubview(titleLabel)
+//        insideButton.addSubview(imageView)
+        insideButton.addSubview(labelBackground)
+        insideButton.addSubview(borderView)
+        insideButton.addSubview(titleLabel)
+        
         addSubview(insideButton)
         isAccessibilityElement = true
         accessibilityTraits |= UIAccessibilityTraitButton
@@ -116,64 +117,34 @@ class TabsButton: UIControl {
     override func updateConstraints() {
         super.updateConstraints()
 
-//        labelBackground.snp.remakeConstraints { (make) -> Void in
-//            make.edges.equalTo(insideButton)
-//        }
-//        borderView.snp.remakeConstraints { (make) -> Void in
-//            make.edges.equalTo(insideButton)
-//        }
-//        titleLabel.snp.remakeConstraints { (make) -> Void in
-//            make.edges.equalTo(insideButton)
-//        }
-        imageView.contentMode = .center
-        imageView.snp.remakeConstraints { (make) -> Void in
+//            imageView.contentMode = .center
+//            imageView.snp.remakeConstraints { (make) -> Void in
+//                make.edges.equalTo(insideButton)
+//            }
+
+        labelBackground.snp.remakeConstraints { (make) -> Void in
             make.edges.equalTo(insideButton)
         }
+        borderView.snp.remakeConstraints { (make) -> Void in
+            make.edges.equalTo(insideButton)
+        }
+        titleLabel.snp.remakeConstraints { (make) -> Void in
+            make.edges.equalTo(insideButton)
+        }
+        
         insideButton.snp.remakeConstraints { (make) -> Void in
           // BRAVE mod: getting layout errors with firefox method, temporary hack to bypass the errors
           make.right.equalTo(self).inset(12)
           make.centerY.equalTo(self)
-          make.size.equalTo(22)
+          make.size.equalTo(19)
         }
     }
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
-    override func clone() -> UIView {
-        let button = TabsButton()
-        
-        imageView.tintColor = borderView.color
-
-        button.accessibilityLabel = accessibilityLabel
-        button.titleLabel.text = titleLabel.text
-
-        // Copy all of the styable properties over to the new TabsButton
-        button.titleLabel.font = titleLabel.font
-        button.titleLabel.textColor = titleLabel.textColor
-        button.titleLabel.layer.cornerRadius = titleLabel.layer.cornerRadius
-
-        button.labelBackground.backgroundColor = labelBackground.backgroundColor
-        button.labelBackground.layer.cornerRadius = labelBackground.layer.cornerRadius
-
-        button.borderView.strokeWidth = borderView.strokeWidth
-        button.borderView.color = borderView.color
-        button.borderView.cornerRadius = borderView.cornerRadius
-
-        // BRAVE added
-        for target in allTargets {
-          if let actions = actions(forTarget: target, forControlEvent: .touchUpInside) {
-             for action in actions {
-              button.addTarget(target, action: Selector(action), for: .touchUpInside)
-            }
-          }
-      }
-
-        return button
-    }
     
-    func tabsButtonHold() {
+    @objc func tabsButtonHold() {
         let actionSheetController = UIAlertController(title: nil, message: nil, preferredStyle: UIAlertControllerStyle.actionSheet)
         let closeAllTitle = String(format: Strings.CloseAllTabsTitle, getApp().tabManager.tabs.displayedTabsForCurrentPrivateMode.count)
         let closeAllTabsAction =  UIAlertAction(title: closeAllTitle, style: UIAlertActionStyle.destructive) { (action: UIAlertAction) in
@@ -189,34 +160,26 @@ class TabsButton: UIControl {
         let cancelAction = UIAlertAction(title: Strings.Cancel, style: UIAlertActionStyle.cancel, handler: nil)
         actionSheetController.addAction(cancelAction)
         
-
-        var newPrivateTabAction: UIAlertAction? = nil
-        if !PrivateBrowsing.singleton.isOn {
-            newPrivateTabAction = UIAlertAction(title: Strings.NewPrivateTabTitle,
-                                                    style: .default,
-                                                    handler: respondToNewPrivateTab(action:))
-        }
-        
-        let newTabAction = UIAlertAction(title: Strings.NewTabTitle,
-                                         style: .default,
-                                         handler: respondToNewTab(action:))
-    
-        if let presenter = actionSheetController.popoverPresentationController {
-            presenter.sourceView = self
-            presenter.sourceRect = self.bounds
-        }
-        
         if UIDevice.current.userInterfaceIdiom == .pad {
+            if !PrivateBrowsing.singleton.isOn {
+                let newPrivateTabAction = UIAlertAction(title: Strings.NewPrivateTabTitle,
+                                                        style: .default,
+                                                        handler: respondToNewPrivateTab(action:))
+                actionSheetController.addAction(newPrivateTabAction)
+            }
+            
+            let newTabAction = UIAlertAction(title: Strings.NewTabTitle,
+                                             style: .default,
+                                             handler: respondToNewTab(action:))
             actionSheetController.addAction(newTabAction)
-            if newPrivateTabAction != nil { actionSheetController.addAction(newPrivateTabAction!) }
-            actionSheetController.addAction(closeTabAction)
-            actionSheetController.addAction(closeAllTabsAction)
-        } else {
-            actionSheetController.addAction(closeAllTabsAction)
-            actionSheetController.addAction(closeTabAction)
-            if newPrivateTabAction != nil { actionSheetController.addAction(newPrivateTabAction!) }
-            actionSheetController.addAction(newTabAction)
+            
+            if let presenter = actionSheetController.popoverPresentationController {
+                presenter.sourceView = self
+                presenter.sourceRect = self.bounds
+            }
         }
+        actionSheetController.addAction(closeAllTabsAction)
+        actionSheetController.addAction(closeTabAction)
         
         getApp().browserViewController.present(actionSheetController, animated: true, completion: nil)
     }
@@ -244,7 +207,7 @@ extension TabsButton: Themeable {
 // MARK: UIAppearance
 extension TabsButton {
     
-    dynamic var borderColor: UIColor {
+    @objc dynamic var borderColor: UIColor {
         get { return borderView.color }
         set {
             borderView.color = newValue
@@ -252,27 +215,27 @@ extension TabsButton {
         }
     }
 
-    dynamic var borderWidth: CGFloat {
+    @objc dynamic var borderWidth: CGFloat {
         get { return borderView.strokeWidth }
         set { borderView.strokeWidth = newValue }
     }
 
-    dynamic var textColor: UIColor? {
+    @objc dynamic var textColor: UIColor? {
         get { return titleLabel.textColor }
         set { titleLabel.textColor = newValue }
     }
 
-    dynamic var titleFont: UIFont? {
+    @objc dynamic var titleFont: UIFont? {
         get { return titleLabel.font }
         set { titleLabel.font = newValue }
     }
 
-    dynamic var titleBackgroundColor: UIColor? {
+    @objc dynamic var titleBackgroundColor: UIColor? {
         get { return labelBackground.backgroundColor }
         set { labelBackground.backgroundColor = newValue }
     }
 
-    dynamic var insets : UIEdgeInsets {
+    @objc dynamic var insets : UIEdgeInsets {
         get { return buttonInsets }
         set {
             buttonInsets = newValue

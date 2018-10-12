@@ -12,8 +12,8 @@ import Deferred
 private let log = Logger.browserLogger
 
 struct TopSitesPanelUX {
-    static let statsHeight: CGFloat = 150.0
-    static let statsBottomMargin: CGFloat = 25.0
+    static let statsHeight: CGFloat = 110.0
+    static let statsBottomMargin: CGFloat = 5
 }
 
 class TopSitesPanel: UIViewController, HomePanel {
@@ -48,9 +48,9 @@ class TopSitesPanel: UIViewController, HomePanel {
         view.isHidden = !PrivateBrowsing.singleton.isOn
         return view
     }()
-
+    
     fileprivate lazy var privateTabGraphic: UIImageView = {
-        return UIImageView(image: UIImage(named: "privateLion"))
+        return UIImageView(image: UIImage(named: "private_glasses"))
     }()
 
     fileprivate lazy var privateTabTitleLabel: UILabel = {
@@ -58,7 +58,7 @@ class TopSitesPanel: UIViewController, HomePanel {
         view.lineBreakMode = .byWordWrapping
         view.textAlignment = .center
         view.numberOfLines = 0
-        view.font = UIFont.systemFont(ofSize: 18, weight: UIFontWeightSemibold)
+        view.font = UIFont.systemFont(ofSize: 18, weight: UIFont.Weight.semibold)
         view.textColor = UIColor(white: 1, alpha: 0.6)
         view.text = Strings.Private_Tab_Title
         return view
@@ -69,7 +69,7 @@ class TopSitesPanel: UIViewController, HomePanel {
         view.lineBreakMode = .byWordWrapping
         view.textAlignment = .center
         view.numberOfLines = 0
-        view.font = UIFont.systemFont(ofSize: 14, weight: UIFontWeightMedium)
+        view.font = UIFont.systemFont(ofSize: 14, weight: UIFont.Weight.medium)
         view.textColor = UIColor(white: 1, alpha: 1.0)
         view.text = Strings.Private_Tab_Body
         return view
@@ -78,14 +78,31 @@ class TopSitesPanel: UIViewController, HomePanel {
     fileprivate lazy var privateTabLinkButton: UIButton = {
         let view = UIButton()
         let linkButtonTitle = NSAttributedString(string: Strings.Private_Tab_Link, attributes:
-            [NSUnderlineStyleAttributeName: NSUnderlineStyle.styleSingle.rawValue])
+            [NSAttributedStringKey.underlineStyle: NSUnderlineStyle.styleSingle.rawValue])
         view.setAttributedTitle(linkButtonTitle, for: .normal)
-        view.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: UIFontWeightMedium)
+        view.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: UIFont.Weight.medium)
         view.titleLabel?.textColor = UIColor(white: 1, alpha: 0.25)
         view.titleLabel?.textAlignment = .center
         view.titleLabel?.lineBreakMode = .byWordWrapping
         view.addTarget(self, action: #selector(showPrivateTabInfo), for: .touchUpInside)
         return view
+    }()
+    
+    fileprivate var ddgLogo = UIImageView(image: UIImage(named: "duckduckgo"))
+    
+    fileprivate lazy var ddgLabel: UILabel = {
+        let label = UILabel()
+        label.numberOfLines = 0
+        label.textColor = BraveUX.GreyD
+        label.font = UIFont.systemFont(ofSize: 14, weight: UIFont.Weight.regular)
+        label.text = Strings.DDG_promotion
+        return label
+    }()
+    
+    fileprivate lazy var ddgButton: UIControl = {
+        let control = UIControl()
+        control.addTarget(self, action: #selector(showDDGCallout), for: .touchUpInside)
+        return control
     }()
 
     fileprivate lazy var braveShieldStatsView: BraveShieldStatsView = {
@@ -93,6 +110,9 @@ class TopSitesPanel: UIViewController, HomePanel {
         view.autoresizingMask = [.flexibleWidth]
         return view
     }()
+    
+    /// Called after user taps on ddg popup to set it as a default search enginge in private browsing mode.
+    var ddgPrivateSearchCompletionBlock: (() -> ())?
 
     // MARK: - Init/lifecycle
     init() {
@@ -102,7 +122,8 @@ class TopSitesPanel: UIViewController, HomePanel {
         NotificationCenter.default.addObserver(self, selector: #selector(TopSitesPanel.updateIphoneConstraints), name: NSNotification.Name.UIDeviceOrientationDidChange, object: nil)
     }
 
-    func existingUserTopSitesConversion() {
+    @objc func existingUserTopSitesConversion() {
+        dataSource.refetch()
         collection.reloadData()
     }
 
@@ -140,14 +161,30 @@ class TopSitesPanel: UIViewController, HomePanel {
         braveShieldStatsView.frame = statsViewFrame
 
         collection.addSubview(braveShieldStatsView)
+        
+        ddgButton.addSubview(ddgLogo)
+        ddgButton.addSubview(ddgLabel)
 
         privateTabMessageContainer.addSubview(privateTabGraphic)
         privateTabMessageContainer.addSubview(privateTabTitleLabel)
         privateTabMessageContainer.addSubview(privateTabInfoLabel)
         privateTabMessageContainer.addSubview(privateTabLinkButton)
+        privateTabMessageContainer.addSubview(ddgButton)
         collection.addSubview(privateTabMessageContainer)
 
         makeConstraints()
+        
+        if !getApp().browserViewController.shouldShowDDGPromo {
+            hideDDG()
+        }
+        
+        if let profile = getApp().profile, profile.searchEngines.defaultEngine(forType: .privateMode).shortName == OpenSearchEngine.EngineNames.duckDuckGo {
+            hideDDG()
+        }
+        
+        ddgPrivateSearchCompletionBlock = { [weak self] in
+            self?.hideDDG()
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -156,9 +193,13 @@ class TopSitesPanel: UIViewController, HomePanel {
         // This makes collection view layout to recalculate its cell size.
         collection.collectionViewLayout.invalidateLayout()
     }
+    
+    func hideDDG() {
+        ddgButton.isHidden = true
+    }
 
     /// Handles long press gesture for UICollectionView cells reorder.
-    func handleLongGesture(gesture: UILongPressGestureRecognizer) {
+    @objc func handleLongGesture(gesture: UILongPressGestureRecognizer) {
         switch gesture.state {
         case .began:
             guard let selectedIndexPath = collection.indexPathForItem(at: gesture.location(in: collection)) else {
@@ -195,14 +236,14 @@ class TopSitesPanel: UIViewController, HomePanel {
                 make.width.equalTo(400)
             }
             else {
-                make.top.equalTo(self.braveShieldStatsView.snp.bottom).offset(20)
+                make.top.equalTo(self.braveShieldStatsView.snp.bottom).offset(25)
                 make.leftMargin.equalTo(collection).offset(8)
                 make.rightMargin.equalTo(collection).offset(-8)
             }
             make.bottom.equalTo(collection)
         }
-
-        privateTabGraphic.snp.makeConstraints { (make) -> Void in
+        
+        privateTabGraphic.snp.makeConstraints { make in
             make.top.equalTo(0)
             make.centerX.equalTo(self.privateTabMessageContainer)
         }
@@ -228,7 +269,24 @@ class TopSitesPanel: UIViewController, HomePanel {
                 make.top.equalTo(self.privateTabInfoLabel.snp.bottom).offset(10)
                 make.left.equalTo(0)
                 make.right.equalTo(0)
-                make.bottom.equalTo(0)
+            }
+            
+            ddgLogo.snp.makeConstraints { make in
+                make.top.left.bottom.equalTo(0)
+                make.size.equalTo(38)
+            }
+            
+            ddgLabel.snp.makeConstraints { make in
+                make.top.right.bottom.equalTo(0)
+                make.left.equalTo(self.ddgLogo.snp.right).offset(5)
+                make.width.equalTo(180)
+                make.centerY.equalTo(self.ddgLogo)
+            }
+            
+            ddgButton.snp.makeConstraints { make in
+                make.top.equalTo(self.privateTabLinkButton.snp.bottom).offset(30)
+                make.centerX.equalTo(self.collection)
+                make.bottom.equalTo(-8)
             }
         } else {
             updateIphoneConstraints()
@@ -237,8 +295,8 @@ class TopSitesPanel: UIViewController, HomePanel {
     
     override func viewSafeAreaInsetsDidChange() {
         // Not sure why but when a side panel is opened and you transition from portait to landscape
-        // top site cells are misaligned, this is a workaroud for this edge case. Happens only on iPhoneX.
-        if #available(iOS 11.0, *), DeviceDetector.iPhoneX {
+        // top site cells are misaligned, this is a workaroud for this edge case. Happens only on iPhoneX*.
+        if #available(iOS 11.0, *) {
             collection.snp.remakeConstraints { make -> Void in
                 make.top.equalTo(self.view.safeAreaLayoutGuide.snp.top)
                 make.bottom.equalTo(self.view.safeAreaLayoutGuide.snp.bottom)
@@ -248,7 +306,7 @@ class TopSitesPanel: UIViewController, HomePanel {
         }
     }
     
-    func updateIphoneConstraints() {
+    @objc func updateIphoneConstraints() {
         if UIDevice.current.userInterfaceIdiom == .pad {
             return
         }
@@ -281,21 +339,51 @@ class TopSitesPanel: UIViewController, HomePanel {
             make.top.equalTo(self.privateTabInfoLabel.snp.bottom).offset(offset)
             make.left.equalTo(32)
             make.right.equalTo(-32)
+        }
+        
+        ddgLogo.snp.remakeConstraints { make in
+            make.top.left.bottom.equalTo(0)
+            make.size.equalTo(38)
+        }
+
+        ddgLabel.snp.remakeConstraints { make in
+            make.top.right.bottom.equalTo(0)
+            make.left.equalTo(self.ddgLogo.snp.right).offset(5)
+            make.width.equalTo(180)
+            make.centerY.equalTo(self.ddgLogo)
+        }
+        
+        ddgButton.snp.remakeConstraints { make in
+            make.top.equalTo(self.privateTabLinkButton.snp.bottom).offset(30)
+            make.centerX.equalTo(self.collection)
             make.bottom.equalTo(-8)
         }
         
         self.view.setNeedsUpdateConstraints()
     }
 
+    @objc func showDDGCallout() {
+        getApp().browserViewController.presentDDGCallout(force: true)
+    }
 
     func endEditing() {
-        (view.window as! BraveMainWindow).removeTouchFilter(self)
+        guard let window = view.window as? BraveMainWindow else { return }
+        window.removeTouchFilter(self)
         dataSource.isEditing = false
     }
 
     // MARK: - Private browsing modde
-    func privateBrowsingModeChanged() {
+    @objc func privateBrowsingModeChanged() {
         let isPrivateBrowsing = PrivateBrowsing.singleton.isOn
+        
+        if isPrivateBrowsing {
+            let profile = getApp().profile
+            
+            let isDDGSet = profile?.searchEngines.defaultEngine(forType: .privateMode).shortName == OpenSearchEngine.EngineNames.duckDuckGo
+            let shouldShowDDGPromo = getApp().browserViewController.shouldShowDDGPromo
+            
+            ddgButton.isHidden = isDDGSet || !shouldShowDDGPromo
+        }
 
         // TODO: This entire blockshould be abstracted
         //  to make code in this class DRY (duplicates from elsewhere)
@@ -311,7 +399,7 @@ class TopSitesPanel: UIViewController, HomePanel {
         collection.reloadData()
     }
     
-    func showPrivateTabInfo() {
+    @objc     func showPrivateTabInfo() {
         let url = URL(string: "https://github.com/brave/browser-laptop/wiki/What-a-Private-Tab-actually-does")!
         postAsyncToMain {
             let t = getApp().tabManager
@@ -323,7 +411,7 @@ class TopSitesPanel: UIViewController, HomePanel {
 // MARK: - Delegates
 extension TopSitesPanel: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let fav = dataSource.frc?.object(at: indexPath) as? Bookmark
+        let fav = dataSource.favoriteBookmark(at: indexPath)
 
         guard let urlString = fav?.url, let url = URL(string: urlString) else { return }
 
@@ -397,6 +485,13 @@ extension TopSitesPanel: ThumbnailCellDelegate {
 
         let deleteAction = UIAlertAction(title: Strings.Remove_Favorite, style: .destructive) { _ in
             fav.remove(save: true)
+            
+            // Remove cached icon.
+            if let urlString = fav.url, let url = URL(string: urlString) {
+                ImageCache.shared.remove(url, type: .square)
+            }
+            
+            self.dataSource.isEditing = false
         }
 
         let editAction = UIAlertAction(title: Strings.Edit_Favorite, style: .default) { _ in
@@ -404,10 +499,14 @@ extension TopSitesPanel: ThumbnailCellDelegate {
 
             let editPopup = UIAlertController.userTextInputAlert(title: Strings.Edit_Bookmark, message: urlString,
                                                              startingText: title, startingText2: fav.url,
-                                                             placeholder2: urlString) { callbackTitle, callbackUrl in
+                                                             placeholder2: urlString,
+                                                             keyboardType2: .URL) { callbackTitle, callbackUrl in
                 if let cTitle = callbackTitle, !cTitle.isEmpty, let cUrl = callbackUrl, !cUrl.isEmpty {
-                    fav.update(customTitle: cTitle, url: cUrl, save: true)
+                    if URL(string: cUrl) != nil {
+                        fav.update(customTitle: cTitle, url: cUrl, save: true)
+                    }
                 }
+                self.dataSource.isEditing = false
             }
 
             self.present(editPopup, animated: true, completion: nil)
@@ -418,9 +517,16 @@ extension TopSitesPanel: ThumbnailCellDelegate {
         actionSheet.addAction(editAction)
         actionSheet.addAction(deleteAction)
         actionSheet.addAction(cancelAction)
-
-        self.present(actionSheet, animated: true) { _ in
-            self.dataSource.isEditing = false
+        
+        if DeviceDetector.isIpad {
+            actionSheet.popoverPresentationController?.permittedArrowDirections = .any
+            actionSheet.popoverPresentationController?.sourceView = thumbnailCell
+            actionSheet.popoverPresentationController?.sourceRect = thumbnailCell.bounds
+            present(actionSheet, animated: true, completion: nil)
+        } else {
+            present(actionSheet, animated: true) {
+                self.dataSource.isEditing = false
+            }
         }
     }
 }

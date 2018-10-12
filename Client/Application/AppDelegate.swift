@@ -68,7 +68,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
 
     // Swift Selectors hate class method on extensions, this just wraps the behavior
     // Also, must be public
-    func updateDauStatWrapper() {
+    @objc func updateDauStatWrapper() {
         guard let prefs = profile?.prefs else {
             log.warning("Couldn't find profile, unable to send dau stats!")
             return
@@ -126,7 +126,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
             log.error("Failed to assign AVAudioSession category to allow playing with silent switch on for aural progress bar")
         }
 
-        let defaultRequest = URLRequest(url: UIConstants.DefaultHomePage as URL)
+        var defaultRequest = URLRequest(url: UIConstants.DefaultHomePage as URL)
+        defaultRequest.addValue(WebServer.uniqueBytes, forHTTPHeaderField: WebServer.headerAuthKey)
         let imageStore = DiskImageStore(files: profile.files, namespace: "TabManagerScreenshots", quality: UIConstants.ScreenshotQuality)
 
         log.debug("Configuring tabManager…")
@@ -171,19 +172,28 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
             profile.prefs.setBool(true, forKey: FavoritesHelper.initPrefsKey)
         }
         
+        let isFirstLaunch = self.getProfile(application).prefs.arrayForKey(DAU.preferencesKey) == nil
+        
         // MARK: User referral program
         if let urp = UserReferralProgram() {
-            let isFirstLaunch = self.getProfile(application).prefs.arrayForKey(DAU.preferencesKey) == nil
             if isFirstLaunch {
-                urp.referralLookup()
+                urp.referralLookup { url in
+                    guard let url = url else { return }
+                    postAsyncToMain(1) { try? self.browserViewController.openURLInNewTab(url.asURL()) }
+                }
             } else {
+                urp.getCustomHeaders()
                 urp.pingIfEnoughTimePassed()
             }
         } else {
             log.error("Failed to initialize user referral program")
             UrpLog.log("Failed to initialize user referral program")
         }
-
+        
+        if isFirstLaunch {
+            SearchEngines.regionalSearchEnginesFlagsSetup(prefs: getProfile(application).prefs)
+        }
+        
         log.debug("Adding observers…")
         NotificationCenter.default.addObserver(forName: NSNotification.Name.FSReadingListAddReadingListItem, object: nil, queue: nil) { (notification) -> Void in
             if let userInfo = notification.userInfo, let url = userInfo["URL"] as? URL {
@@ -428,14 +438,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
 
         switch behavior {
         case .show:
-            UIView.animate(withDuration: 0.1, animations: { _ in
+            UIView.animate(withDuration: 0.1, animations: {
                 self.blurryLayout.alpha = 0
             }, completion: { _ in
                 self.blurryLayout.removeFromSuperview()
             })
         case .hide:
             window?.addSubview(blurryLayout)
-            UIView.animate(withDuration: 0.1, animations: { _ in
+            UIView.animate(withDuration: 0.1, animations: {
                 self.blurryLayout.alpha = 1
             })
         }
@@ -500,7 +510,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
         ReaderModeHandlers.register(server, profile: profile)
         ErrorPageHelper.register(server, certStore: profile.certStore)
         AboutHomeHandler.register(server)
-        AboutLicenseHandler.register(server)
         SessionRestoreHandler.register(server)
         // Bug 1223009 was an issue whereby CGDWebserver crashed when moving to a background task
         // catching and handling the error seemed to fix things, but we're not sure why.

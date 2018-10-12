@@ -7,6 +7,8 @@ import Shared
 var requestCount = 0
 let markerRequestHandled = "request-already-handled"
 
+private let log = Logger.browserLogger
+
 /*
  When URLProtocol is called, the WebThread is locked; we need to be wary of deadlock
  if we call other places in the code that may also have locks, because if the URLProtocol
@@ -15,11 +17,24 @@ let markerRequestHandled = "request-already-handled"
 
 class URLProtocol: Foundation.URLProtocol {
 
-    var connection: NSURLConnection?
+    var session: URLSession?
+    var dataTask: URLSessionDataTask?
     var disableJavascript = false
     static var testShieldState: BraveShieldState?
+    
+    override init(request: URLRequest, cachedResponse: CachedURLResponse?, client: URLProtocolClient?) {
+        super.init(request: request, cachedResponse: cachedResponse, client: client)
+        
+        if session == nil {
+            session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        }
+    }
 
     override class func canInit(with request: URLRequest) -> Bool {
+        if UserReferralProgram.shouldAddCustomHeader(for: request) != nil {
+            return true
+        }
+
         //print("Request #\(requestCount++): URL = \(request.mainDocumentURL?.absoluteString)")
         if let scheme = request.url?.scheme, !scheme.startsWith("http") {
             return false
@@ -30,6 +45,11 @@ class URLProtocol: Foundation.URLProtocol {
         }
 
         guard let url = request.url else { return false }
+        
+        // We let reader moded requests through to add auth headers to them.
+        if ReaderModeUtils.isReaderModeURL(url) {
+            return true
+        }
 
         let shieldState = testShieldState != nil ? testShieldState! : getShields(request)
         if shieldState.isAllOff() {
@@ -149,6 +169,15 @@ class URLProtocol: Foundation.URLProtocol {
     override func startLoading() {
         let newRequest = URLProtocol.cloneRequest(request)
         Foundation.URLProtocol.setProperty(true, forKey: markerRequestHandled, in: newRequest)
+        
+        // We do not care about ad blocking for reader mode links, we just need to pass an authentication header.
+        if let url = request.url, ReaderModeUtils.isReaderModeURL(url) {
+            newRequest.addValue(WebServer.uniqueBytes, forHTTPHeaderField: WebServer.headerAuthKey)
+            
+            dataTask = session?.dataTask(with: newRequest as URLRequest)
+            dataTask?.resume()
+            return
+        }
 
         let shieldState = URLProtocol.getShields(request)
         let ua = request.allHTTPHeaderFields?["User-Agent"]
@@ -184,7 +213,8 @@ class URLProtocol: Foundation.URLProtocol {
                     BrowserTabToUAMapper.userAgentToBrowserTab(ua)?.webView?.loadRequest(newRequest as URLRequest)
                 }
             } else {
-                connection = NSURLConnection(request: newRequest as URLRequest, delegate: self)
+                dataTask = session?.dataTask(with: newRequest as URLRequest)
+                dataTask?.resume()
                 postAsyncToMain(0.1) {
                     BrowserTabToUAMapper.userAgentToBrowserTab(ua)?.webView?.shieldStatUpdate(.httpseIncrement)
                 }
@@ -199,46 +229,66 @@ class URLProtocol: Foundation.URLProtocol {
             return
         }
 
-        self.connection = NSURLConnection(request: newRequest as URLRequest, delegate: self)
+        if let customHeader = UserReferralProgram.shouldAddCustomHeader(for: request) {
+            UrpLog.log("Adding custom header: [\(customHeader.field): \(customHeader.value)] for domain: \(request.url?.absoluteString ?? "404")")
+            newRequest.addValue(customHeader.value, forHTTPHeaderField: customHeader.field)
+        }
+
+        dataTask = session?.dataTask(with: newRequest as URLRequest)
+        dataTask?.resume()
     }
 
     override func stopLoading() {
-        connection?.cancel()
-        self.connection = nil
+        dataTask?.cancel()
+        dataTask = nil
     }
+}
 
-    // MARK: NSURLConnection
-    func connection(_ connection: NSURLConnection!, didReceiveResponse response: URLResponse!) {
-        var returnedResponse: URLResponse = response
-        if let response = response as? HTTPURLResponse,
-            let url = response.url, disableJavascript && !AboutUtils.isAboutURL(url)
-        {
-            var fields = response.allHeaderFields as? [String : String] ?? [String : String]()
-            fields["X-WebKit-CSP"] = "script-src none"
-            returnedResponse = HTTPURLResponse(url: url, statusCode: response.statusCode, httpVersion: "HTTP/1.1" /*not used*/, headerFields: fields)!
+// We need to implement those methods to handle urlprotocol correctly.
+extension URLProtocol: URLSessionDataDelegate {
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        client?.urlProtocol(self, didLoad: data)
+    }
+    
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        let policy = URLCache.StoragePolicy(rawValue: request.cachePolicy.rawValue) ?? .notAllowed
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: policy)
+        completionHandler(.allow)
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error {
+            client?.urlProtocol(self, didFailWithError: error)
+        } else {
+            client?.urlProtocolDidFinishLoading(self)
         }
-        self.client!.urlProtocol(self, didReceive: returnedResponse, cacheStoragePolicy: .allowed)
     }
-
-    func connection(_ connection: NSURLConnection, willSendRequest request: URLRequest, redirectResponse response: URLResponse?) -> URLRequest?
-    {
-        if let response = response {
-            client?.urlProtocol(self, wasRedirectedTo: request, redirectResponse: response)
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        client?.urlProtocol(self, wasRedirectedTo: request, redirectResponse: response)
+        completionHandler(request)
+    }
+    
+    func urlSession(_ session: URLSession, didBecomeInvalidWithError error: Error?) {
+        guard let error = error else { return }
+        client?.urlProtocol(self, didFailWithError: error)
+    }
+    
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        let protectionSpace = challenge.protectionSpace
+        let sender = challenge.sender
+        
+        if protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
+            if let serverTrust = protectionSpace.serverTrust {
+                let credential = URLCredential(trust: serverTrust)
+                sender?.use(credential, for: challenge)
+                completionHandler(.useCredential, credential)
+                return
+            }
         }
-        return request
     }
-
-    func connection(_ connection: NSURLConnection!, didReceiveData data: Data!) {
-        self.client!.urlProtocol(self, didLoad: data)
-        //self.mutableData.appendData(data)
-    }
-
-    func connectionDidFinishLoading(_ connection: NSURLConnection!) {
-        self.client!.urlProtocolDidFinishLoading(self)
-    }
-
-    func connection(_ connection: NSURLConnection!, didFailWithError error: NSError!) {
-        self.client!.urlProtocol(self, didFailWithError: error)
-        print("* Error url: \(self.request.url?.absoluteString)\n* Details: \(error)")
+    
+    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        client?.urlProtocolDidFinishLoading(self)
     }
 }

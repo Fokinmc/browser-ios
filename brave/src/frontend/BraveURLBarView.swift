@@ -10,7 +10,7 @@ extension UILabel {
             let attr = NSMutableAttributedString(attributedString: text)
             let start = text.string.characters.distance(from: text.string.startIndex, to: range.lowerBound)
             let length = text.string.characters.distance(from: range.lowerBound, to: range.upperBound)
-            attr.addAttributes([NSFontAttributeName: UIFont.boldSystemFont(ofSize: self.font.pointSize)], range: NSMakeRange(start, length))
+            attr.addAttributes([NSAttributedStringKey.font: UIFont.boldSystemFont(ofSize: self.font.pointSize)], range: NSMakeRange(start, length))
             self.attributedText = attr
         }
     }
@@ -78,7 +78,6 @@ class BraveURLBarView : URLBarView {
     override func commonInit() {
         BraveURLBarView.currentInstance = self
         locationContainer.layer.cornerRadius = BraveUX.TextFieldCornerRadius
-        locationContainer.layer.borderWidth = 0.5
 
         addSubview(leftSidePanelButton.underlay)
         addSubview(leftSidePanelButton)
@@ -151,10 +150,8 @@ class BraveURLBarView : URLBarView {
         switch(themeName) {
         case Theme.NormalMode:
             backgroundColor = BraveUX.ToolbarsBackgroundSolidColor
-            locationContainer.layer.borderColor = BraveUX.GreyD.cgColor
         case Theme.PrivateMode:
             backgroundColor = BraveUX.DarkToolbarsBackgroundSolidColor
-            locationContainer.layer.borderColor = BraveUX.GreyI.cgColor
         default:
             break
         }

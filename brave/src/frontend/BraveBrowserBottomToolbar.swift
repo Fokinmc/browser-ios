@@ -32,7 +32,7 @@ class BraveBrowserBottomToolbar : BrowserToolbar {
 
     lazy var tabsButton: TabsButton = {
         let tabsButton = TabsButton()
-        tabsButton.titleLabel.text = "\(tabsCount)"
+        tabsButton.titleLabel.text = "\(BraveBrowserBottomToolbar.tabsCount)"
         tabsButton.addTarget(self, action: #selector(BraveBrowserBottomToolbar.onClickShowTabs), for: UIControlEvents.touchUpInside)
         tabsButton.accessibilityLabel = Strings.Show_Tabs
         tabsButton.accessibilityIdentifier = "Toolbar.ShowTabs"
@@ -70,10 +70,11 @@ class BraveBrowserBottomToolbar : BrowserToolbar {
             }
         }
         
-//        let longPress = UILongPressGestureRecognizer(target: self,
-//                                                     action: #selector(longPressForSearchInNewTab(gestureRecognizer:)))
-//        longPress.minimumPressDuration = 0.2
-//        searchButton.addGestureRecognizer(longPress)
+        let longPress = UILongPressGestureRecognizer(target: self,
+                                                     action: #selector(longPressForPrivateTab(gestureRecognizer:)))
+        longPress.minimumPressDuration = 0.2
+        addTabButton.addGestureRecognizer(longPress)
+
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -92,38 +93,38 @@ class BraveBrowserBottomToolbar : BrowserToolbar {
                                   clonedTabsButton: &instance.clonedTabsButton, count: count, animated: animated)
     }
     
-//    func longPressForSearchInNewTab(gestureRecognizer: UILongPressGestureRecognizer) {
-//        let alertController = UIAlertController(title: nil,
-//                                                message: nil,
-//                                                preferredStyle: .actionSheet)
-//
-//        let cancelAction = UIAlertAction(title: Strings.Cancel,
-//                                         style: .cancel,
-//                                         handler: nil)
-//        alertController.addAction(cancelAction)
-//
-//        if !PrivateBrowsing.singleton.isOn {
-//            let newPrivateTabAction = UIAlertAction(title: Strings.NewPrivateTabTitle,
-//                                                    style: .default,
-//                                                    handler: respondToNewPrivateTab(action:))
-//            alertController.addAction(newPrivateTabAction)
-//        }
-//
-//
-//
-//        let newTabAction = UIAlertAction(title: Strings.NewTabTitle,
-//                                         style: .default,
-//                                         handler: respondToNewTab(action:))
-//        alertController.addAction(newTabAction)
-//
-//        getApp().browserViewController.present(alertController, animated: true, completion: nil)
-//    }
+    @objc func longPressForPrivateTab(gestureRecognizer: UILongPressGestureRecognizer) {
+        let alertController = UIAlertController(title: nil,
+                                                message: nil,
+                                                preferredStyle: .actionSheet)
+
+        let cancelAction = UIAlertAction(title: Strings.Cancel,
+                                         style: .cancel,
+                                         handler: nil)
+        alertController.addAction(cancelAction)
+
+        if !PrivateBrowsing.singleton.isOn {
+            let newPrivateTabAction = UIAlertAction(title: Strings.NewPrivateTabTitle,
+                                                    style: .default,
+                                                    handler: respondToNewPrivateTab(action:))
+            alertController.addAction(newPrivateTabAction)
+        }
+
+
+
+        let newTabAction = UIAlertAction(title: Strings.NewTabTitle,
+                                         style: .default,
+                                         handler: respondToNewTab(action:))
+        alertController.addAction(newTabAction)
+
+        getApp().browserViewController.present(alertController, animated: true, completion: nil)
+    }
 
     func setAlphaOnAllExceptTabButton(_ alpha: CGFloat) {
         actionButtons.forEach { $0.alpha = alpha }
     }
 
-    func onClickShowTabs() {
+    @objc func onClickShowTabs() {
         setAlphaOnAllExceptTabButton(0)
         BraveURLBarView.tabButtonPressed()
     }
@@ -151,14 +152,14 @@ class BraveBrowserBottomToolbar : BrowserToolbar {
             make.left.equalTo(backButton.snp.right)
         }
 
-        searchButton.snp.remakeConstraints { make in
+        shareButton.snp.remakeConstraints { make in
             common(make)
             make.centerX.equalTo(self)
         }
 
-        shareButton.snp.remakeConstraints { make in
+        addTabButton.snp.remakeConstraints { make in
             common(make)
-            make.left.equalTo(searchButton.snp.right)
+            make.left.equalTo(shareButton.snp.right)
         }
 
         tabsContainer.snp.remakeConstraints { make in

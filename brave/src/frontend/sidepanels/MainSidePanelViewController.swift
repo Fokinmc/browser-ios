@@ -107,7 +107,7 @@ class MainSidePanelViewController : SidePanelBaseViewController, MainSidePanelVi
         }
     }
     
-    func onClickSettingsButton() {
+    @objc func onClickSettingsButton() {
         if getApp().profile == nil {
             return
         }
@@ -131,14 +131,14 @@ class MainSidePanelViewController : SidePanelBaseViewController, MainSidePanelVi
         }
     }
     
-    func SEL_closeSync() {
+    @objc func SEL_closeSync() {
         syncSetupViewController?.dismiss(animated: true)
     }
 
     //For this function to be called there *must* be a selected tab and URL
     //since we disable the button when there's no URL
     //see MainSidePanelViewController#updateBookmarkStatus(isBookmarked,url)
-    func onClickBookmarksButton() {
+    @objc func onClickBookmarksButton() {
         guard let tab = browserViewController?.tabManager.selectedTab else { return }
         guard let url = tab.url else { return }
 
@@ -171,7 +171,7 @@ class MainSidePanelViewController : SidePanelBaseViewController, MainSidePanelVi
         topButtonsView.snp.remakeConstraints {
             make in
             make.right.equalTo(containerView)
-            if #available(iOS 11.0, *), DeviceDetector.iPhoneX {
+            if #available(iOS 11.0, *) {
                 make.left.equalTo(containerView.safeAreaLayoutGuide.snp.left)
                 make.top.equalTo(containerView.safeAreaLayoutGuide.snp.top)
             } else {
@@ -233,7 +233,7 @@ class MainSidePanelViewController : SidePanelBaseViewController, MainSidePanelVi
         }
     }
     
-    func onClickPageButton(_ sender: UIButton) {
+    @objc func onClickPageButton(_ sender: UIButton) {
         guard let newView = self.pageButtons[sender]?.view else { return }
         
         // Hide all old views

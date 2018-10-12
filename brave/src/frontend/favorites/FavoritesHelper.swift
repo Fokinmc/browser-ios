@@ -12,9 +12,9 @@ struct FavoritesHelper {
     // Indicates if favorites have been initialized.
     static let initPrefsKey = "FavoritesHelperInitPrefsKey"
 
-    static func frc() -> NSFetchedResultsController<NSFetchRequestResult> {
-        let context = DataController.shared.mainThreadContext
-        let fetchRequest = NSFetchRequest<NSFetchRequestResult>()
+    static func frc() -> NSFetchedResultsController<Bookmark> {
+        let context = DataController.viewContext
+        let fetchRequest = NSFetchRequest<Bookmark>()
 
         fetchRequest.entity = Bookmark.entity(context: context)
         fetchRequest.fetchBatchSize = 20
@@ -50,6 +50,31 @@ struct FavoritesHelper {
     }
 
     static func isAlreadyAdded(_ url: URL) -> Bool{
-        return Bookmark.contains(url: url, getFavorites: true, context: DataController.shared.mainThreadContext)
+        return Bookmark.contains(url: url, getFavorites: true)
+    }
+    
+    static func fallbackIcon(withLetter letter: String, color: UIColor, andSize iconSize: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: iconSize)
+        return  renderer.image { ctx in
+            let rectangle = CGRect(x: 0, y: 0, width: iconSize.width, height: iconSize.height)
+            
+            let textColor = color.isLight ? BraveUX.GreyH : BraveUX.White
+            
+            ctx.cgContext.addRect(rectangle)
+            ctx.cgContext.setStrokeColor(UIColor.clear.cgColor)
+            ctx.cgContext.setFillColor(color.cgColor)
+            ctx.cgContext.drawPath(using: .fillStroke)
+            
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.alignment = .center
+            
+            let attrs = [NSAttributedStringKey.font: UIFont(name: "HelveticaNeue-Thin", size: iconSize.height-90) ?? UIFont.systemFont(ofSize: iconSize.height-90, weight: UIFont.Weight.thin),
+                         NSAttributedStringKey.paragraphStyle: paragraphStyle,
+                         NSAttributedStringKey.foregroundColor: textColor]
+            
+            let string: NSString = NSString(string: letter.uppercased())
+            let size = string.size(withAttributes: attrs)
+            string.draw(at: CGPoint(x: (iconSize.width-size.width)/2, y: (iconSize.height-size.height)/2), withAttributes: attrs)
+        }
     }
 }

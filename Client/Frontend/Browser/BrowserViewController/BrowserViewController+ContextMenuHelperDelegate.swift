@@ -25,18 +25,12 @@ extension BrowserViewController: ContextMenuHelperDelegate {
         #endif
         showContextMenu(elements, touchPoint: touchPoint)
     }
-
-    func showContextMenu(_ elements: ContextMenuHelper.Elements, touchPoint: CGPoint) {
-        let touchSize = CGSize(width: 0, height: 16)
-
-        let actionSheetController = UIAlertController(title: nil, message: nil, preferredStyle: UIAlertControllerStyle.actionSheet)
+    
+    private func setUpContextMenu(actionSheetController: UIAlertController, elements: ContextMenuHelper.Elements,
+                                  touchPoint: CGPoint, touchSize: CGSize) -> String? {
         var dialogTitle: String?
-        actionSheetController.view.tag = BraveWebViewConstants.kContextMenuBlockNavigation
-
         if let url = elements.image {
-            if dialogTitle == nil {
-                dialogTitle = url.absoluteString
-            }
+            dialogTitle = url.absoluteString
             
             let saveImageAction = createSaveImageAction(from: url)
             actionSheetController.addAction(saveImageAction)
@@ -82,7 +76,43 @@ extension BrowserViewController: ContextMenuHelperDelegate {
         if let openAllBookmarksAction = createOpenAllBookmarksAction(using: elements) {
             actionSheetController.addAction(openAllBookmarksAction)
         }
-
+        return dialogTitle
+    }
+    
+    private func setUpContextMenu(actionSheetController: UIAlertController, phoneNumber: String, link: URL) -> String {
+        if UIApplication.shared.canOpenURL(link) {
+            let title = String(format: Strings.Call_number, phoneNumber)
+            let callAction = UIAlertAction(title: title, style: .default) { _ in
+                UIApplication.shared.open(link)
+            }
+            actionSheetController.addAction(callAction)
+        }
+        
+        let copyAction = UIAlertAction(title: Strings.Copy_Phone_Number, style: .default) { _ in
+            UIPasteboard.general.string = phoneNumber
+        }
+        actionSheetController.addAction(copyAction)
+        
+        return phoneNumber
+    }
+    
+    func showContextMenu(_ elements: ContextMenuHelper.Elements, touchPoint: CGPoint) {
+        let touchSize = CGSize(width: 0, height: 16)
+        
+        let actionSheetController = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        var dialogTitle: String?
+        actionSheetController.view.tag = BraveWebViewConstants.kContextMenuBlockNavigation
+        
+        let urlString = elements.link?.absoluteString
+        if let url = elements.link,
+            let phoneNumber = urlString?.regexReplacePattern("^tel:", with: ""), phoneNumber != urlString {
+            dialogTitle = setUpContextMenu(actionSheetController: actionSheetController, phoneNumber: phoneNumber,
+                                           link: url)
+        } else {
+            dialogTitle = setUpContextMenu(actionSheetController: actionSheetController, elements: elements,
+                                           touchPoint: touchPoint, touchSize: touchSize)
+        }
+        
         // If we're showing an arrow popup, set the anchor to the long press location.
         if let popoverPresentationController = actionSheetController.popoverPresentationController {
             popoverPresentationController.sourceView = view
@@ -91,9 +121,9 @@ extension BrowserViewController: ContextMenuHelperDelegate {
         }
 
         actionSheetController.title = dialogTitle?.ellipsize(maxLength: ActionSheetTitleMaxLength)
-        let cancelAction = UIAlertAction(title: Strings.Cancel, style: UIAlertActionStyle.cancel, handler: nil)
+        let cancelAction = UIAlertAction(title: Strings.Cancel, style: .cancel)
         actionSheetController.addAction(cancelAction)
-        self.present(actionSheetController, animated: true, completion: nil)
+        self.present(actionSheetController, animated: true)
     }
 
     private func createShareImageAction(from url: URL, tab: Browser?, origin: CGPoint, size: CGSize) -> UIAlertAction {
@@ -144,7 +174,8 @@ extension BrowserViewController: ContextMenuHelperDelegate {
             let changeCount = pasteboard.changeCount
             let application = UIApplication.shared
             var taskId: UIBackgroundTaskIdentifier = 0
-            taskId = application.beginBackgroundTask (expirationHandler: { _ in
+
+            taskId = application.beginBackgroundTask (expirationHandler: {
                 application.endBackgroundTask(taskId)
             })
             
@@ -216,26 +247,26 @@ extension BrowserViewController: ContextMenuHelperDelegate {
     }
     
     private func createOpenAllBookmarksAction(using elements: ContextMenuHelper.Elements) -> UIAlertAction? {
-        guard let folder = elements.folder, let bookmarks = Bookmark.getChildren(forFolderUUID: folder, ignoreFolders: true, context: DataController.shared.mainThreadContext) else {
+        guard let folder = elements.folder, let bookmarks = Bookmark.getChildren(forFolderUUID: folder, ignoreFolders: true) else {
             return nil
         }
         let openTitle = String(format: Strings.Open_All_Bookmarks, bookmarks.count)
         return UIAlertAction(title: openTitle, style: UIAlertActionStyle.default) { (action: UIAlertAction) -> Void in
-            let context = DataController.shared.workerContext
+            let context = DataController.newBackgroundContext()
             context.perform {
                 for bookmark in bookmarks {
                     guard let urlString = bookmark.url else { continue }
                     guard let url = URL(string: urlString) else { continue }
-                    guard let tabID = TabMO.freshTab().syncUUID else { continue }
+                    guard let tabID = TabMO.create().syncUUID else { continue }
                     let data = SavedTab(id: tabID, title: urlString, url: url.absoluteString, isSelected: false, order: -1, screenshot: nil, history: [url.absoluteString], historyIndex: 0)
-                    TabMO.add(data, context: .mainThreadContext)
+                    TabMO.update(tabData: data)
                     
                     postAsyncToMain {
                         let request = URLRequest(url: url)
                         getApp().tabManager.addTab(request, zombie: true, id: tabID, createWebview: (bookmarks.count == 1))
                     }
                 }
-                DataController.saveContext(context: context)
+                DataController.save(context: context)
             }
         }
     }

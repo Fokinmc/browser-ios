@@ -53,7 +53,8 @@ class TabBarCell: UICollectionViewCell {
         title.snp.makeConstraints({ (make) in
             make.top.bottom.equalTo(self)
             make.left.equalTo(self).inset(16)
-            make.right.equalTo(self).inset(16)
+
+            make.right.equalTo(close.snp.left)
         })
         
         close.setImage(UIImage(named: "close")?.withRenderingMode(.alwaysTemplate), for: .normal)
@@ -85,7 +86,7 @@ class TabBarCell: UICollectionViewCell {
     override var isSelected: Bool {
         didSet(selected) {
             if selected {
-                title.font = UIFont.systemFont(ofSize: 12, weight: UIFontWeightSemibold)
+                title.font = UIFont.systemFont(ofSize: 12, weight: UIFont.Weight.semibold)
                 title.textColor = PrivateBrowsing.singleton.isOn ? BraveUX.GreyA : BraveUX.GreyJ
                 close.isHidden = false
                 close.tintColor = PrivateBrowsing.singleton.isOn ? BraveUX.GreyF : BraveUX.GreyI
@@ -104,7 +105,7 @@ class TabBarCell: UICollectionViewCell {
         }
     }
     
-    func closeTab() {
+    @objc func closeTab() {
         delegate?.tabClose(browser)
     }
     
@@ -221,11 +222,11 @@ class TabsBarViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
     }
     
-    func orientationChanged() {
+    @objc func orientationChanged() {
         overflowIndicators()
     }
     
-    func updateData() {
+    @objc func updateData() {
         tabList = WeakList<Browser>()
         getApp().tabManager.tabs.displayedTabsForCurrentPrivateMode.forEach {
             tabList.insert($0)
@@ -246,7 +247,7 @@ class TabsBarViewController: UIViewController {
         }
     }
     
-    func handleLongGesture(gesture: UILongPressGestureRecognizer) {
+    @objc func handleLongGesture(gesture: UILongPressGestureRecognizer) {
         switch(gesture.state) {
         case UIGestureRecognizerState.began:
             guard let selectedIndexPath = self.collectionView.indexPathForItem(at: gesture.location(in: self.collectionView)) else {
@@ -262,7 +263,7 @@ class TabsBarViewController: UIViewController {
         }
     }
     
-    func addTabPressed() {
+    @objc func addTabPressed() {
         getApp().tabManager.addTabAndSelect()
     }
 
@@ -358,10 +359,9 @@ extension TabsBarViewController: UICollectionViewDelegate, UICollectionViewDataS
             return CGSize(width: view.frame.width, height: view.frame.height)
         }
         
-        let newTabButtonWidth = CGFloat(UIDevice.current.userInterfaceIdiom == .pad ? BraveUX.TabsBarPlusButtonWidth : 0)
         let tabsAndButtonWidth = CGFloat(tabList.count()) * minTabWidth
-        if tabsAndButtonWidth < collectionView.frame.width - newTabButtonWidth {
-            let maxWidth = (collectionView.frame.width - newTabButtonWidth) / CGFloat(tabList.count())
+        if tabsAndButtonWidth < collectionView.frame.width {
+            let maxWidth = (collectionView.frame.width) / CGFloat(tabList.count())
             return CGSize(width: maxWidth, height: view.frame.height)
         }
         

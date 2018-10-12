@@ -166,7 +166,7 @@ class BrowserViewController: UIViewController {
     }
     
     var swipeScheduled = false
-    func leftSwipeToolbar() {
+    @objc func leftSwipeToolbar() {
         if !swipeScheduled {
             swipeScheduled = true
             postAsyncToMain(0.1) {
@@ -179,7 +179,7 @@ class BrowserViewController: UIViewController {
         }
     }
     
-    func rightSwipeToolbar() {
+    @objc func rightSwipeToolbar() {
         if !swipeScheduled {
             swipeScheduled = true
             postAsyncToMain(0.1) {
@@ -274,15 +274,15 @@ class BrowserViewController: UIViewController {
         }
     }
 
-    func SELappDidEnterBackgroundNotification() {
+    @objc func SELappDidEnterBackgroundNotification() {
         displayedPopoverController?.dismiss(animated: false, completion: nil)
     }
 
-    func SELtappedTopArea() {
+    @objc func SELtappedTopArea() {
         scrollController.showToolbars(animated: true)
     }
 
-    func SELappWillResignActiveNotification() {
+    @objc func SELappWillResignActiveNotification() {
         // If we are displying a private tab, hide any elements in the browser that we wouldn't want shown
         // when the app is in the home switcher
         guard let privateTab = tabManager.selectedTab, privateTab.isPrivate else {
@@ -294,7 +294,7 @@ class BrowserViewController: UIViewController {
         urlBar.locationView.alpha = 0
     }
 
-    func SELappDidBecomeActiveNotification() {
+    @objc func SELappDidBecomeActiveNotification() {
         // Re-show any components that might have been hidden because they were being displayed
         // as part of a private mode tab
         UIView.animate(withDuration: 0.2, delay: 0, options: UIViewAnimationOptions(), animations: {
@@ -463,7 +463,7 @@ class BrowserViewController: UIViewController {
         log.debug("BVC done.")
 
         // Updating footer contraints in viewSafeAreaInsetsDidChange, doesn't work when view is loaded so we do it here.
-        if #available(iOS 11.0, *), DeviceDetector.iPhoneX {
+        if #available(iOS 11.0, *) {
             footerBackground?.snp.updateConstraints { make in
                 make.bottom.equalTo(self.footer).inset(self.view.safeAreaInsets.bottom)
             }
@@ -471,7 +471,7 @@ class BrowserViewController: UIViewController {
     }
     
     override func viewSafeAreaInsetsDidChange() {
-        if #available(iOS 11.0, *), DeviceDetector.iPhoneX {
+        if #available(iOS 11.0, *) {
             let keyboardHeight = keyboardState?.intersectionHeightForView(self.view) ?? 0
             adjustFindInPageBar(safeArea: keyboardHeight == 0)
         }
@@ -566,7 +566,7 @@ class BrowserViewController: UIViewController {
     }
     
     func presentBrowserLockCallout() {
-        if profile.prefs.boolForKey(kPrefKeySetBrowserLock) == true || profile.prefs.boolForKey(kPrefKeyPopupForBrowserLock) == true {
+        if PinViewController.isBrowserLockEnabled {
             return
         }
         
@@ -574,6 +574,7 @@ class BrowserViewController: UIViewController {
         let popup = AlertPopupView(image: UIImage(named: "browser_lock_popup"), title: Strings.Browser_lock_callout_title, message: Strings.Browser_lock_callout_message)
         popup.addButton(title: Strings.Browser_lock_callout_not_now) { () -> PopupViewDismissType in
             weakSelf?.profile.prefs.setBool(true, forKey: kPrefKeyPopupForBrowserLock)
+            weakSelf?.selectLocationBar()
             return .flyDown
         }
         popup.addDefaultButton(title: Strings.Browser_lock_callout_enable) { () -> PopupViewDismissType in
@@ -596,19 +597,73 @@ class BrowserViewController: UIViewController {
             
             return .flyUp
         }
+        popup.showWithType(showType: .flyUp)
+    }
+    
+    var shouldShowDDGPromo: Bool {
+        // We want to show ddg promo in most cases so guard return true.
+        guard let prefs = getApp().profile?.prefs else { return true }
+        
+        let regionalSearchEngine = prefs.boolForKey(OpenSearchEngine.RegionalSearchEnginesPrefKeys.qwant_DE_FR)
+        
+        // Pref key can be either false or nil.
+        return regionalSearchEngine != true
+    }
+    
+    func presentDDGCallout(force: Bool = false) { 
+        if !shouldShowDDGPromo {
+            presentBrowserLockCallout()
+            return
+        }
+        
+        let profile = getApp().profile
+        if profile?.prefs.boolForKey(kPrefKeyPopupForDDG) == true && !force {
+            return
+        }
+        
+        // Do not show ddg popup if user already chose it for private browsing.
+        if profile?.searchEngines.defaultEngine(forType: .privateMode).shortName == OpenSearchEngine.EngineNames.duckDuckGo {
+            // Showing only pin code popup.
+            presentBrowserLockCallout()
+            return
+        }
+        
+        weak var weakSelf = self
+        let popup = AlertPopupView(image: UIImage(named: "duckduckgo"), title: Strings.DDG_callout_title, message: Strings.DDG_callout_message)
+        popup.dismissHandler = {
+            weakSelf?.presentBrowserLockCallout()
+        }
+        popup.addButton(title: Strings.DDG_callout_no) {
+            weakSelf?.profile.prefs.setBool(true, forKey: kPrefKeyPopupForDDG)
+            return .flyDown
+        }
+        popup.addDefaultButton(title: Strings.DDG_callout_enable) {
+            if getApp().profile == nil {
+                return .flyUp
+            }
+            
+            weakSelf?.profile.prefs.setBool(true, forKey: kPrefKeyPopupForDDG)
+            weakSelf?.profile.searchEngines.defaultEngine(OpenSearchEngine.EngineNames.duckDuckGo, forType: .privateMode)
+            
+            if let topSitesPanel = weakSelf?.homePanelController?.topSitesPanel as? TopSitesPanel {
+                topSitesPanel.ddgPrivateSearchCompletionBlock?()
+            }
+            
+            return .flyUp
+        }
         popup.showWithType(showType: .normal)
     }
 
     func presentTopSitesToFavoritesChange() {
-        let popup = AlertPopupView(image: UIImage(named: "icon_top_fav"), title: "Top sites are now favorites.", message: "You can now edit and arrange favorites however you like. Add favorites from the share menu when visiting a website.")
+        let popup = AlertPopupView(image: UIImage(named: "icon_top_fav"), title: Strings.FavoritesPopupTitle, message: Strings.FavoritesPopupDescription)
 
-        popup.addButton(title: "Use Defaults") { () -> PopupViewDismissType in
+        popup.addButton(title: Strings.UseDefaults) { () -> PopupViewDismissType in
             FavoritesHelper.addDefaultFavorites()
             NotificationCenter.default.post(name: NotificationTopSitesConversion, object: nil)
             return .flyDown
         }
 
-        popup.addDefaultButton(title: "Convert") { () -> PopupViewDismissType in
+        popup.addDefaultButton(title: Strings.Convert) { () -> PopupViewDismissType in
             self.topSitesQuery().uponQueue(DispatchQueue.main) { sites in
                 FavoritesHelper.convertToBookmarks(sites)
                 NotificationCenter.default.post(name: NotificationTopSitesConversion, object: nil)
@@ -622,7 +677,7 @@ class BrowserViewController: UIViewController {
     fileprivate func topSitesQuery() -> Deferred<[Site]> {
         let result = Deferred<[Site]>()
 
-        let context = DataController.shared.workerContext
+        let context = DataController.newBackgroundContext()
         context.perform {
             var sites = [Site]()
 
@@ -693,7 +748,7 @@ class BrowserViewController: UIViewController {
         urlBar.setNeedsUpdateConstraints()
         
         webViewContainer.snp.remakeConstraints { make in
-            if #available(iOS 11.0, *), DeviceDetector.iPhoneX {
+            if #available(iOS 11.0, *) {
                 make.left.equalTo(self.view.safeAreaLayoutGuide.snp.left)
                 make.right.equalTo(self.view.safeAreaLayoutGuide.snp.right)
             } else {
@@ -823,9 +878,8 @@ class BrowserViewController: UIViewController {
     }
 
     func removeBookmark(_ url: URL) {
-        if Bookmark.remove(forUrl: url, context: DataController.shared.mainThreadContext) {
-            self.urlBar.updateBookmarkStatus(false)
-        }
+        Bookmark.remove(forUrl: url)
+        urlBar.updateBookmarkStatus(false)
     }
 
     override func accessibilityPerformEscape() -> Bool {
@@ -874,7 +928,7 @@ class BrowserViewController: UIViewController {
             return
         }
 
-        let isBookmarked = Bookmark.contains(url: url, context: DataController.shared.mainThreadContext)
+        let isBookmarked = Bookmark.contains(url: url)
         self.urlBar.updateBookmarkStatus(isBookmarked)
     }
     // Mark: Opening New Tabs
@@ -1086,9 +1140,9 @@ class BrowserViewController: UIViewController {
     }
     
     /// There is only one case when search bar needs additional bottom inset:
-    /// iPhoneX horizontal with keyboard hidden.
+    /// iPhoneX* horizontal with keyboard hidden.
     fileprivate func adjustFindInPageBar(safeArea: Bool) {
-        if #available(iOS 11, *), DeviceDetector.iPhoneX, let bar = findInPageBar {
+        if #available(iOS 11, *), let bar = findInPageBar {
             bar.snp.updateConstraints { make in
                 if safeArea && BraveApp.isIPhoneLandscape() {
                     make.bottom.equalTo(findInPageContainer).inset(self.view.safeAreaInsets.bottom)
@@ -1224,7 +1278,7 @@ extension BrowserViewController: IntroViewControllerDelegate {
     }
 
     func introViewControllerDidFinish(_ introViewController: IntroViewController) {
-        introViewController.dismiss(animated: true) { finished in
+        introViewController.dismiss(animated: true) {
             if self.navigationController?.viewControllers.count ?? 0 > 1 {
                 self.navigationController?.popToRootViewController(animated: true)
             }
@@ -1245,7 +1299,7 @@ extension BrowserViewController: KeyboardHelperDelegate {
 
         adjustFindInPageBar(safeArea: false)
 
-        if let loginsHelper = tabManager.selectedTab?.getHelper(LoginsHelper) {
+        if let loginsHelper = tabManager.selectedTab?.getHelper(LoginsHelper.self) {
             // keyboardWillShowWithState is called during a hide (brilliant), and because PW button setup is async make sure to exit here if already showing the button, or the show code will be called after kb hide
             if !urlBar.pwdMgrButton.isHidden || loginsHelper.getKeyboardAccessory() != nil {
                 return
@@ -1286,7 +1340,7 @@ extension BrowserViewController: KeyboardHelperDelegate {
             self.snackBars.layoutIfNeeded()
         }
         
-        if let loginsHelper = tabManager.selectedTab?.getHelper(LoginsHelper) {
+        if let loginsHelper = tabManager.selectedTab?.getHelper(LoginsHelper.self) {
             loginsHelper.hideKeyboardAccessory()
             urlBar.pwdMgrButton.isHidden = true
             urlBar.setNeedsUpdateConstraints()
@@ -1392,8 +1446,8 @@ class BlurWrapper: UIView {
     }
 }
 
-protocol Themeable {
-    func applyTheme(_ themeName: String)
+@objc protocol Themeable {
+    @objc func applyTheme(_ themeName: String)
 }
 
 extension BrowserViewController: JSPromptAlertControllerDelegate {

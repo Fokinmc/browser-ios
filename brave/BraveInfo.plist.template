@@ -45,24 +45,6 @@
     <string>itms-books</string>
 		<string>org-appextension-feature-password-management</string>
 	</array>
-
-		<key>MIXPANEL_TOKEN</key>
-		<string>MIXPANEL_TOKEN_REMOVED</string>
-
-	<key>Fabric</key>
-	<dict>
-		<key>APIKey</key>
-		<string>FABRIC_KEY_REMOVED</string>
-		<key>Kits</key>
-		<array>
-			<dict>
-				<key>KitInfo</key>
-				<dict/>
-				<key>KitName</key>
-				<string>Crashlytics</string>
-			</dict>
-		</array>
-	</dict>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -73,7 +55,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Websites you visit may request your location.</string>
 	<key>NSCameraUsageDescription</key>
-        <string>Scan barcode for Brave sync.</string>
+  <string>Scan barcode for Brave sync.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Enabling FaceID allows you to quickly and securely unlock Brave.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
     <string>$(CUSTOM_BUNDLE_ID).browsing</string>

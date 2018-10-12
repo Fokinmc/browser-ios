@@ -7,7 +7,6 @@ import Shared
 
 class BraveShieldStatsView: UIView, Themeable {
     fileprivate let millisecondsPerItem: Int32 = 50
-    fileprivate let line = UIView()
     
     lazy var adsStatView: StatView = {
         let statView = StatView(frame: CGRect.zero)
@@ -45,15 +44,6 @@ class BraveShieldStatsView: UIView, Themeable {
     override init(frame: CGRect) {
         super.init(frame: frame)
         
-        addSubview(line)
-        line.backgroundColor = PrivateBrowsing.singleton.isOn ? BraveUX.GreyI : BraveUX.GreyB
-        line.snp.makeConstraints { (make) -> Void in
-            make.bottom.equalTo(0).offset(-0.5)
-            make.height.equalTo(0.5)
-            make.left.equalTo(0)
-            make.right.equalTo(0)
-        }
-        
         for s: StatView in stats {
             addSubview(s)
         }
@@ -83,7 +73,7 @@ class BraveShieldStatsView: UIView, Themeable {
         }
     }
     
-    func update() {
+    @objc func update() {
         adsStatView.stat = BraveGlobalShieldStats.singleton.adblock.abbreviation
         trackersStatView.stat = BraveGlobalShieldStats.singleton.trackingProtection.abbreviation
         httpsStatView.stat = BraveGlobalShieldStats.singleton.httpse.abbreviation
@@ -148,7 +138,7 @@ class StatView: UIView {
         let label = UILabel()
         label.textAlignment = .center
         label.numberOfLines = 0
-        label.font = UIFont.systemFont(ofSize: 24, weight: UIFontWeightBold)
+        label.font = UIFont.systemFont(ofSize: 24, weight: UIFont.Weight.bold)
         return label
     }()
     
@@ -157,7 +147,7 @@ class StatView: UIView {
         label.textColor = BraveUX.TopSitesStatTitleColor
         label.textAlignment = .center
         label.numberOfLines = 0
-        label.font = UIFont.systemFont(ofSize: 12, weight: UIFontWeightMedium)
+        label.font = UIFont.systemFont(ofSize: 12, weight: UIFont.Weight.medium)
         return label
     }()
     

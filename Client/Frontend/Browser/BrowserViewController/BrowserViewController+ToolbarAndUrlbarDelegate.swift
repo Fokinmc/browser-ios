@@ -184,7 +184,7 @@ extension BrowserViewController: URLBarDelegate {
         // If we can't make a valid URL, do a search query.
         // If we still don't have a valid URL, something is broken. Give up.
         guard let url = URIFixup.getURL(text) ??
-            profile.searchEngines.defaultEngine.searchURLForQuery(text) else {
+            profile.searchEngines.defaultEngine().searchURLForQuery(text) else {
                 log.error("Error handling URL entry: \"\(text)\".")
                 return
         }
@@ -226,7 +226,7 @@ extension BrowserViewController: BrowserToolbarDelegate {
                 return
         }
 
-        let isBookmarked = Bookmark.contains(url: url, context: DataController.shared.mainThreadContext)
+        let isBookmarked = Bookmark.contains(url: url)
         if isBookmarked {
             self.removeBookmark(url)
         } else {

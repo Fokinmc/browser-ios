@@ -104,6 +104,16 @@ class Browser: NSObject, BrowserWebViewDelegate {
     var restoring: Bool = false
     var pendingScreenshot = false
     
+    // Tab color
+    var color: UIColor? {
+        didSet {
+            guard let url = url else { return }
+            let context = DataController.newBackgroundContext()
+            log.debug((self.color ?? FallbackIcon.color).toHexString())
+            Domain.updateColor(color ?? FallbackIcon.color, forUrl: url, context: context)
+        }
+    }
+    
     var tabID: String?
 
     /// The last title shown by this tab. Used by the tab tray to show titles for zombie tabs.
@@ -156,25 +166,13 @@ class Browser: NSObject, BrowserWebViewDelegate {
         }
         
         guard let callback = callback else { return }
-        if let tab = TabMO.get(byId: tabID, context: .workerThreadContext), let url = tab.imageUrl {
+        if let tab = TabMO.get(fromId: tabID, context: DataController.newBackgroundContext()), let url = tab.imageUrl {
             weak var weakSelf = self
             ImageCache.shared.image(url, type: .portrait, callback: { (image) in
                 if let image = image {
                     weakSelf?._screenshot = image
                     weakSelf?.isScreenshotSet = true
                 }
-//                else if weakSelf?._screenshot == nil {
-//                    guard let image = UIImage(named: "tab_placeholder"), let beginImage: CIImage = CIImage(image: image) else { return }
-//                    let filter = CIFilter(name: "CIHueAdjust")
-//                    filter?.setValue(beginImage, forKey: kCIInputImageKey)
-//                    filter?.setValue(CGFloat(arc4random_uniform(314 / (arc4random_uniform(3) + 1))) * 0.01 - 3.14, forKey: "inputAngle")
-//
-//                    guard let outputImage = filter?.outputImage else { return }
-//
-//                    let context = CIContext(options:nil)
-//                    guard let cgimg = context.createCGImage(outputImage, from: outputImage.extent) else { return }
-//                    weakSelf?._screenshot = UIImage(cgImage: cgimg)
-//                }
                 postAsyncToMain {
                     callback(weakSelf?._screenshot)
                 }
@@ -278,7 +276,7 @@ class Browser: NSObject, BrowserWebViewDelegate {
                 guard let url = URL(string: urlString) else { continue }
                 let updatedURL = WebServer.sharedInstance.updateLocalURL(url)!.absoluteString
                 let curr = updatedURL.regexReplacePattern("https?:..", with: "")
-                if curr.characters.count > 1 && curr == prev {
+                if curr.count > 1 && curr == prev {
                     updatedURLs.removeLast()
                 }
                 prev = curr
@@ -299,6 +297,7 @@ class Browser: NSObject, BrowserWebViewDelegate {
             }
             
             lastRequest = URLRequest(url: restoreURL)
+            lastRequest?.addValue(WebServer.uniqueBytes, forHTTPHeaderField: WebServer.headerAuthKey)
             webView.loadRequest(lastRequest!)
         } else if let request = lastRequest {
             webView.loadRequest(request)
@@ -383,7 +382,7 @@ class Browser: NSObject, BrowserWebViewDelegate {
             if let title = displayURL?.absoluteString {
                 return title
             }
-            else if let tab = TabMO.get(byId: tabID, context: .mainThreadContext) {
+            else if let tab = TabMO.get(fromId: tabID, context: DataController.viewContext) {
                 return tab.title ?? tab.url ?? ""
             }
             return ""
@@ -592,7 +591,7 @@ class Browser: NSObject, BrowserWebViewDelegate {
             screenshotUUID = UUID()
         }
         
-        if let tab = TabMO.get(byId: tabID, context: .workerThreadContext), let url = tab.imageUrl {
+        if let tab = TabMO.get(fromId: tabID, context: DataController.newBackgroundContext()), let url = tab.imageUrl {
             if !PrivateBrowsing.singleton.isOn {
                 ImageCache.shared.cache(screenshot, url: url, type: .portrait, callback: {
                     debugPrint("Cached screenshot.")

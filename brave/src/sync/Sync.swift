@@ -25,7 +25,6 @@ private let log = Logger.browserLogger
  */
 
 let NotificationSyncReady = "NotificationSyncReady"
-let NotificationSyncFetched = "NotificationSyncFetched"
 
 // TODO: Make capitals - pluralize - call 'categories' not 'type'
 public enum SyncRecordType : String {
@@ -156,6 +155,8 @@ class Sync: JSInjector {
         
         return context
     }()
+    
+    var syncFetchedHandlers: [() -> ()]?
     
     override init() {
         super.init()
@@ -543,7 +544,7 @@ extension Sync {
             self.lastFetchWasTrimmed = false
         }
         
-        NotificationCenter.default.post(name: Notification.Name(rawValue: NotificationSyncFetched), object: nil)
+        syncFetchedHandlers?.forEach { $0() }
     }
 
     func deleteSyncUser(_ data: [String: AnyObject]) {
